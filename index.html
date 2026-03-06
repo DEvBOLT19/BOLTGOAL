@@ -1,0 +1,973 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>Life Tracker</title>
+<link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700;900&family=Lora:ital,wght@0,400;0,600;1,400&family=JetBrains+Mono:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+/* ═══════════════════════════════════════════
+   TOKENS
+═══════════════════════════════════════════ */
+:root {
+  --bg:        #07070f;
+  --surf:      #0e0e1a;
+  --surf2:     #151523;
+  --border:    rgba(255,255,255,.06);
+  --gold:      #c9973a;
+  --goldb:     #f0c96b;
+  --goldg:     rgba(201,151,58,.22);
+  --green:     #3ecf6e;
+  --greeng:    rgba(62,207,110,.24);
+  --purple:    #8b7fff;
+  --text:      #e0dbd3;
+  --muted:     #524e62;
+  --dim:       #252335;
+  --r:         28px;   /* main node radius */
+  --sr:        16px;   /* sub node radius  */
+  --road:      700px;
+}
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box;}
+html{scroll-behavior:smooth;}
+body{
+  background:var(--bg); color:var(--text);
+  font-family:'Lora',Georgia,serif;
+  min-height:100vh; overflow-x:hidden;
+}
+
+/* starfield */
+body::before{
+  content:''; position:fixed; inset:0; pointer-events:none; z-index:0;
+  background:
+    radial-gradient(1px 1px at  8% 12%,rgba(255,255,255,.45) 0,transparent 100%),
+    radial-gradient(1px 1px at 22% 58%,rgba(255,255,255,.28) 0,transparent 100%),
+    radial-gradient(1px 1px at 37%  6%,rgba(255,255,255,.38) 0,transparent 100%),
+    radial-gradient(1px 1px at 54% 74%,rgba(255,255,255,.28) 0,transparent 100%),
+    radial-gradient(1px 1px at 70% 32%,rgba(255,255,255,.45) 0,transparent 100%),
+    radial-gradient(1px 1px at 80% 85%,rgba(255,255,255,.28) 0,transparent 100%),
+    radial-gradient(2px 2px at 16% 78%,rgba(201,151,58,.28) 0,transparent 100%),
+    radial-gradient(2px 2px at 62% 14%,rgba(139,127,255,.28) 0,transparent 100%);
+}
+
+/* ═══════════════════════════════════════════
+   LAYOUT WRAPPERS
+═══════════════════════════════════════════ */
+.page{ position:relative; z-index:1; }
+
+/* ═══════════════════════════════════════════
+   HEADER
+═══════════════════════════════════════════ */
+header{
+  text-align:center; padding:48px 20px 24px;
+  position:relative; z-index:10;
+}
+.eyebrow{
+  font-family:'JetBrains Mono',monospace;
+  font-size:10px; letter-spacing:4px; text-transform:uppercase;
+  color:var(--gold); opacity:.7; margin-bottom:12px;
+}
+.main-title{
+  font-family:'Cinzel',serif;
+  font-size:clamp(22px,5.5vw,46px); font-weight:900;
+  background:linear-gradient(135deg,var(--goldb) 0%,var(--gold) 55%,#9a6c1a 100%);
+  -webkit-background-clip:text; -webkit-text-fill-color:transparent;
+  background-clip:text; letter-spacing:3px; line-height:1.15;
+  cursor:text; outline:none; display:block;
+}
+.main-title:focus{ opacity:.85; }
+.sub-title{
+  margin-top:8px; font-size:14px; font-style:italic;
+  color:var(--muted); cursor:text; outline:none; display:block;
+}
+.sub-title:focus{ color:var(--text); }
+.header-rule{
+  width:160px; height:1px; margin:18px auto 0;
+  background:linear-gradient(90deg,transparent,var(--gold),transparent);
+}
+
+/* edit hint */
+.edit-hint{
+  font-family:'JetBrains Mono',monospace;
+  font-size:9px; letter-spacing:2px; text-transform:uppercase;
+  color:var(--muted); margin-top:10px; opacity:.5;
+}
+
+/* ═══════════════════════════════════════════
+   PROGRESS BAR
+═══════════════════════════════════════════ */
+.prog-wrap{
+  max-width:480px; margin:0 auto 32px; padding:0 24px;
+  position:relative; z-index:10;
+}
+.prog-track{
+  height:4px; background:var(--surf2);
+  border-radius:8px; overflow:hidden; border:1px solid var(--border);
+}
+.prog-fill{
+  height:100%;
+  background:linear-gradient(90deg,var(--gold),var(--goldb),var(--green));
+  border-radius:8px; transition:width .9s cubic-bezier(.4,0,.2,1);
+  box-shadow:0 0 10px var(--goldg);
+}
+.prog-meta{
+  display:flex; justify-content:space-between; margin-top:6px;
+  font-family:'JetBrains Mono',monospace; font-size:10px; color:var(--muted);
+}
+.prog-pct{ color:var(--gold); }
+
+/* ═══════════════════════════════════════════
+   GOAL CARD
+═══════════════════════════════════════════ */
+.goal-section{
+  display:flex; flex-direction:column; align-items:center;
+  padding:0 20px; position:relative; z-index:10;
+}
+.goal-card{
+  background:linear-gradient(135deg,#12102a,#19163a);
+  border:1px solid rgba(139,127,255,.3); border-radius:16px;
+  padding:18px 24px; max-width:420px; width:100%; text-align:center;
+  box-shadow:0 0 50px rgba(139,127,255,.07),0 4px 28px rgba(0,0,0,.5);
+}
+.goal-eyebrow{
+  font-family:'JetBrains Mono',monospace;
+  font-size:9px; letter-spacing:3px; text-transform:uppercase;
+  color:var(--purple); opacity:.75; margin-bottom:6px;
+}
+.goal-title-el{
+  font-family:'Cinzel',serif;
+  font-size:clamp(13px,2.5vw,18px); font-weight:700;
+  color:#cac2ff; letter-spacing:1px; line-height:1.3;
+  cursor:text; outline:none; display:block;
+}
+.goal-title-el:focus{ opacity:.85; }
+.goal-desc-el{
+  margin-top:6px; font-size:12px; font-style:italic;
+  color:var(--muted); line-height:1.6;
+  cursor:text; outline:none; display:block;
+}
+.goal-desc-el:focus{ color:var(--text); }
+.goal-arrow{
+  width:2px; height:42px;
+  background:linear-gradient(180deg,rgba(139,127,255,.45),rgba(201,151,58,.35));
+  margin:0 auto; position:relative;
+}
+.goal-arrow::after{
+  content:'▼'; position:absolute; bottom:-16px; left:50%; transform:translateX(-50%);
+  font-size:9px; color:var(--gold); opacity:.55;
+}
+
+/* ═══════════════════════════════════════════
+   ROADMAP WRAPPER + SVG
+═══════════════════════════════════════════ */
+#roadmap-wrap{
+  position:relative; z-index:10;
+  display:flex; flex-direction:column; align-items:center;
+  padding:10px 0 20px;
+}
+#road-svg{
+  position:absolute; top:0; left:50%; transform:translateX(-50%);
+  pointer-events:none; overflow:visible;
+}
+
+/* ── Level row (alternates left/right on desktop) ── */
+.road-stop{
+  position:relative;
+  display:flex; align-items:flex-start;
+  width:100%; max-width:var(--road);
+  padding:0 20px; margin-bottom:28px;
+}
+.road-stop.left { justify-content:flex-start; }
+.road-stop.right{ justify-content:flex-end;   }
+
+/* ── Main node ── */
+.main-node{
+  width:calc(var(--r)*2); height:calc(var(--r)*2);
+  border-radius:50%; border:2px solid var(--dim);
+  background:var(--surf);
+  display:flex; align-items:center; justify-content:center;
+  cursor:pointer; flex-shrink:0; position:relative; z-index:5;
+  font-family:'Cinzel',serif; font-size:13px; font-weight:700;
+  color:var(--muted); user-select:none;
+  transition:all .28s ease; -webkit-tap-highlight-color:transparent;
+}
+.main-node:hover,.main-node:active{ transform:scale(1.1); }
+.main-node.st-done{
+  border-color:var(--green);
+  background:radial-gradient(circle at 38% 38%,#1b3e28,#0d1e15);
+  color:var(--green); box-shadow:0 0 18px var(--greeng);
+}
+.main-node.st-active{
+  border-color:var(--gold);
+  background:radial-gradient(circle at 38% 38%,#2e2008,#1a1304);
+  color:var(--gold); box-shadow:0 0 18px var(--goldg);
+  animation:pulse 2.6s ease-in-out infinite;
+}
+.main-node.st-locked{ opacity:.28; cursor:pointer; }
+@keyframes pulse{
+  0%,100%{ box-shadow:0 0 18px var(--goldg); }
+  50%    { box-shadow:0 0 30px var(--goldg),0 0 55px rgba(201,151,58,.1); }
+}
+
+/* ── Level card ── */
+.level-card{
+  background:var(--surf); border:1px solid var(--border);
+  border-radius:13px; padding:14px 16px 12px;
+  max-width:280px; box-shadow:0 4px 22px rgba(0,0,0,.38);
+  transition:border-color .3s;
+}
+/* On mobile: card goes full width below node */
+.road-stop.left  .level-card{ margin-left:14px; }
+.road-stop.right .level-card{ margin-right:14px; }
+.level-card.st-done  { border-color:rgba(62,207,110,.18); }
+.level-card.st-active{ border-color:rgba(201,151,58,.22); }
+
+/* card content */
+.lv-num{
+  font-family:'JetBrains Mono',monospace;
+  font-size:8px; letter-spacing:2px; text-transform:uppercase;
+  color:var(--muted); margin-bottom:3px;
+}
+.lv-title-el{
+  font-family:'Cinzel',serif; font-size:13px; font-weight:700;
+  line-height:1.3; color:var(--text);
+  cursor:text; outline:none; display:block; word-break:break-word;
+}
+.lv-title-el:focus{ background:rgba(255,255,255,.04); border-radius:4px; padding:1px 4px; margin:-1px -4px; }
+.lv-title-el.st-done  { color:var(--green); }
+.lv-title-el.st-active{ color:var(--goldb); }
+.lv-title-el.st-locked{ color:var(--muted); }
+
+.lv-desc-el{
+  font-size:11px; font-style:italic; color:var(--muted);
+  margin-top:4px; line-height:1.55; display:block;
+  cursor:text; outline:none; word-break:break-word;
+}
+.lv-desc-el:focus{ color:var(--text); }
+.lv-desc-el:empty::before{ content:attr(data-ph); opacity:.35; pointer-events:none; }
+
+.lv-date-el{
+  font-family:'JetBrains Mono',monospace;
+  font-size:8px; color:var(--muted); margin-top:5px;
+  cursor:text; outline:none; display:block;
+}
+.lv-date-el:focus{ color:var(--text); }
+.lv-date-el:empty::before{ content:'+ add date'; opacity:.3; pointer-events:none; }
+
+.lv-badge{
+  display:inline-block; margin-top:6px;
+  font-family:'JetBrains Mono',monospace;
+  font-size:7px; letter-spacing:2px; text-transform:uppercase;
+  padding:2px 8px; border-radius:20px;
+}
+.lv-badge.st-done  { background:rgba(62,207,110,.09); color:var(--green); border:1px solid rgba(62,207,110,.28); }
+.lv-badge.st-active{ background:rgba(201,151,58,.09); color:var(--gold); border:1px solid rgba(201,151,58,.28); }
+.lv-badge.st-locked{ background:rgba(255,255,255,.03); color:var(--muted); }
+
+/* ── Sub-milestones ── */
+.sub-list{ margin-top:10px; display:flex; flex-direction:column; gap:7px; }
+.sub-item{ display:flex; align-items:flex-start; gap:7px; }
+.road-stop.right .sub-item{ flex-direction:row-reverse; }
+
+.sub-dot{
+  width:calc(var(--sr)*2); height:calc(var(--sr)*2);
+  border-radius:50%; border:1.5px solid var(--dim);
+  background:var(--surf2);
+  display:flex; align-items:center; justify-content:center;
+  cursor:pointer; flex-shrink:0;
+  font-size:8px; color:var(--muted);
+  transition:all .22s ease; -webkit-tap-highlight-color:transparent;
+}
+.sub-dot:hover,.sub-dot:active{ transform:scale(1.12); }
+.sub-dot.st-done  { border-color:var(--green); color:var(--green); background:rgba(62,207,110,.06); box-shadow:0 0 7px var(--greeng); }
+.sub-dot.st-active{ border-color:var(--gold); color:var(--gold); background:rgba(201,151,58,.06); }
+.sub-dot.st-locked{ opacity:.28; }
+
+.sub-body{ flex:1; min-width:0; }
+.sub-name-el{
+  font-family:'Cinzel',serif; font-size:10px; font-weight:600;
+  color:var(--text); line-height:1.3;
+  cursor:text; outline:none; display:block; word-break:break-word;
+}
+.sub-name-el:focus{ background:rgba(255,255,255,.04); border-radius:3px; padding:1px 3px; margin:-1px -3px; }
+.sub-name-el.st-done  { color:var(--green); }
+.sub-name-el.st-active{ color:var(--goldb); }
+.sub-name-el.st-locked{ color:var(--muted); }
+.sub-desc-el{
+  font-size:9.5px; font-style:italic; color:var(--muted);
+  line-height:1.4; margin-top:1px;
+  cursor:text; outline:none; display:block; word-break:break-word;
+}
+.sub-desc-el:focus{ color:var(--text); }
+.sub-desc-el:empty::before{ content:attr(data-ph); opacity:.3; pointer-events:none; }
+
+/* ═══════════════════════════════════════════
+   ACTION BUTTONS (add / delete)
+═══════════════════════════════════════════ */
+.btn-add-sub{
+  margin-top:9px;
+  display:flex; align-items:center; gap:5px;
+  background:none; border:1px dashed var(--dim);
+  color:var(--muted); border-radius:8px;
+  padding:5px 10px; font-size:10px;
+  font-family:'JetBrains Mono',monospace; letter-spacing:1px;
+  cursor:pointer; transition:all .2s; width:100%;
+  -webkit-tap-highlight-color:transparent;
+}
+.btn-add-sub:hover{ border-color:var(--gold); color:var(--gold); background:var(--goldg); }
+
+.btn-del-sub{
+  background:none; border:none; color:#ff5555;
+  cursor:pointer; font-size:12px; opacity:0;
+  padding:0 3px; flex-shrink:0; transition:opacity .2s;
+  -webkit-tap-highlight-color:transparent;
+}
+.sub-item:hover .btn-del-sub{ opacity:.6; }
+.btn-del-sub:hover{ opacity:1 !important; }
+
+/* Level controls row */
+.lv-controls{
+  display:flex; align-items:center; gap:8px; margin-top:8px;
+}
+.btn-del-level{
+  background:none; border:1px solid rgba(255,85,85,.2);
+  color:#ff5555; border-radius:6px;
+  padding:3px 9px; font-size:9px;
+  font-family:'JetBrains Mono',monospace; letter-spacing:1px;
+  cursor:pointer; transition:all .2s; opacity:.4;
+  -webkit-tap-highlight-color:transparent;
+}
+.level-card:hover .btn-del-level{ opacity:.7; }
+.btn-del-level:hover{ opacity:1 !important; background:rgba(255,85,85,.1); }
+
+/* Add Level button */
+.btn-add-level{
+  display:flex; align-items:center; justify-content:center; gap:8px;
+  margin:8px auto 0; max-width:var(--road); width:100%; padding:0 20px;
+  position:relative; z-index:10;
+}
+.btn-add-level button{
+  background:none; border:1px dashed var(--dim);
+  color:var(--muted); border-radius:10px;
+  padding:10px 24px; font-size:11px;
+  font-family:'JetBrains Mono',monospace; letter-spacing:2px; text-transform:uppercase;
+  cursor:pointer; transition:all .25s; width:100%; max-width:340px;
+  -webkit-tap-highlight-color:transparent;
+}
+.btn-add-level button:hover{ border-color:var(--gold); color:var(--gold); background:var(--goldg); }
+
+/* ═══════════════════════════════════════════
+   CROWN FINALE
+═══════════════════════════════════════════ */
+#finale{
+  position:relative; z-index:10;
+  text-align:center; padding:50px 20px 80px;
+}
+.finale-stem{
+  width:2px; height:60px; background:var(--dim);
+  margin:0 auto; position:relative; overflow:hidden;
+}
+.finale-stem-fill{
+  position:absolute; top:0; left:0; right:0;
+  background:linear-gradient(180deg,var(--gold),var(--goldb));
+  box-shadow:0 0 8px var(--goldg);
+  transition:height 1.2s ease; height:0;
+}
+.crown-icon{
+  font-size:64px; line-height:1; display:block;
+  margin:0 auto 16px;
+  filter:drop-shadow(0 0 14px var(--goldg));
+  opacity:.18; transform:scale(.84);
+  transition:all .6s ease;
+}
+.crown-icon.lit{
+  opacity:1; transform:scale(1);
+  animation:crownFloat 3.2s ease-in-out infinite;
+}
+@keyframes crownFloat{
+  0%,100%{ transform:scale(1) translateY(0); filter:drop-shadow(0 0 20px var(--goldg)) drop-shadow(0 0 50px rgba(201,151,58,.38)); }
+  50%    { transform:scale(1) translateY(-7px); filter:drop-shadow(0 0 28px var(--goldg)) drop-shadow(0 0 70px rgba(201,151,58,.48)); }
+}
+.crown-msg{
+  font-family:'Cinzel',serif;
+  font-size:clamp(18px,4vw,32px); font-weight:900;
+  background:linear-gradient(135deg,var(--goldb),var(--gold),#9a6c1a);
+  -webkit-background-clip:text; -webkit-text-fill-color:transparent;
+  background-clip:text; letter-spacing:3px;
+  opacity:.16; transition:opacity .8s ease;
+}
+.crown-msg.lit{ opacity:1; }
+.crown-sub{
+  margin-top:8px; font-size:14px; font-style:italic;
+  color:var(--muted); opacity:.12; transition:opacity .8s ease .35s;
+}
+.crown-sub.lit{ opacity:.65; }
+
+/* ═══════════════════════════════════════════
+   TOAST
+═══════════════════════════════════════════ */
+#toast{
+  position:fixed; bottom:24px; left:50%;
+  transform:translateX(-50%) translateY(12px);
+  background:var(--surf2); border:1px solid var(--gold); color:var(--text);
+  padding:8px 20px; border-radius:28px;
+  font-family:'JetBrains Mono',monospace; font-size:10px; letter-spacing:1px;
+  opacity:0; transition:all .3s ease; z-index:2000;
+  box-shadow:0 4px 22px var(--goldg); pointer-events:none; white-space:nowrap;
+}
+#toast.show{ opacity:1; transform:translateX(-50%) translateY(0); }
+
+/* ═══════════════════════════════════════════
+   MOBILE OVERRIDES
+   On small screens the road goes straight (no L/R
+   alternation) with node + card stacked vertically.
+═══════════════════════════════════════════ */
+@media (max-width: 600px) {
+  :root{ --r:22px; --sr:13px; --road:100%; }
+
+  header{ padding:36px 16px 20px; }
+  .main-title{ letter-spacing:1px; }
+
+  /* Force all stops left-aligned on mobile */
+  .road-stop,
+  .road-stop.left,
+  .road-stop.right{
+    justify-content:flex-start !important;
+    padding:0 16px;
+    flex-direction:column;
+    align-items:flex-start;
+  }
+
+  /* Card goes below node on mobile */
+  .road-stop .main-node{ order:0; }
+  .road-stop .level-card{
+    order:1;
+    margin-left:0 !important; margin-right:0 !important;
+    margin-top:10px; max-width:100%;
+  }
+
+  /* Sub items always left-to-right on mobile */
+  .road-stop .sub-item,
+  .road-stop.right .sub-item{
+    flex-direction:row !important;
+  }
+
+  .btn-add-level button{ max-width:100%; }
+  .goal-card{ padding:14px 16px; }
+}
+
+/* ═══════════════════════════════════════════
+   CONTENTEDITABLE RESET
+═══════════════════════════════════════════ */
+[contenteditable]{ -webkit-user-select:text; user-select:text; }
+[contenteditable]:focus{ outline:none; }
+
+/* scrollbar */
+::-webkit-scrollbar{ width:5px; }
+::-webkit-scrollbar-track{ background:var(--bg); }
+::-webkit-scrollbar-thumb{ background:var(--surf2); border-radius:3px; }
+</style>
+</head>
+<body>
+<div class="page">
+
+<!-- ════ HEADER ════ -->
+<header>
+  <div class="eyebrow" id="eyebrowEl">PRIVATE · PERSONAL · SACRED</div>
+  <span class="main-title" id="mainTitleEl" contenteditable="true" spellcheck="false"></span>
+  <span class="sub-title"  id="subTitleEl"  contenteditable="true" spellcheck="false"></span>
+  <div class="header-rule"></div>
+  <div class="edit-hint">tap any text to edit · tap nodes to change status</div>
+</header>
+
+<!-- ════ PROGRESS ════ -->
+<div class="prog-wrap">
+  <div class="prog-track"><div class="prog-fill" id="progFill" style="width:0%"></div></div>
+  <div class="prog-meta">
+    <span id="progLabel">0 of 0 complete</span>
+    <span class="prog-pct" id="progPct">0%</span>
+  </div>
+</div>
+
+<!-- ════ GOAL CARD ════ -->
+<div class="goal-section">
+  <div class="goal-card">
+    <div class="goal-eyebrow">THE ULTIMATE GOAL</div>
+    <span class="goal-title-el" id="goalTitleEl" contenteditable="true" spellcheck="false"></span>
+    <span class="goal-desc-el"  id="goalDescEl"  contenteditable="true" spellcheck="false" data-ph="Describe your ultimate goal..."></span>
+  </div>
+  <div class="goal-arrow"></div>
+</div>
+
+<!-- ════ ROADMAP ════ -->
+<div id="roadmap-wrap">
+  <svg id="road-svg" width="1" height="1"></svg>
+</div>
+
+<!-- ════ ADD LEVEL ════ -->
+<div class="btn-add-level">
+  <button id="addLevelBtn">+ ADD NEW LEVEL</button>
+</div>
+
+<!-- ════ CROWN ════ -->
+<div id="finale">
+  <div class="finale-stem"><div class="finale-stem-fill" id="finaleFill"></div></div>
+  <div class="crown-icon" id="crownIcon">👑</div>
+  <div class="crown-msg"  id="crownMsg">I DID IT.</div>
+  <div class="crown-sub"  id="crownSub">The journey is complete. You are unstoppable.</div>
+</div>
+
+</div><!-- .page -->
+<div id="toast"></div>
+
+<script>
+/* ═══════════════════════════════════════════════════════════════
+   DATA — default starter content
+   Everything is editable directly in the browser.
+   All changes auto-save to localStorage.
+═══════════════════════════════════════════════════════════════ */
+const DEFAULTS = {
+  mainTitle: 'RISE & BUILD',
+  subTitle:  'From zero to everything I was meant to be',
+  goalTitle: 'Financial Freedom & A Life Built on My Own Terms',
+  goalDesc:  'Earn enough to never worry, build something I am proud of, and wake up every day with purpose.',
+  levels: [
+    {
+      id:'l1', title:'Waking Up',
+      desc:'The day I stopped lying to myself and decided to actually change.',
+      date:'Jan 2025', status:'done',
+      subs:[
+        { id:'s1a', title:'Wrote my honest truth',    desc:'Put everything on paper — where I was, what I hated, what I wanted.', status:'done' },
+        { id:'s1b', title:'Deleted the distractions', desc:'Removed apps, people, habits keeping me small.',                      status:'done' },
+        { id:'s1c', title:'Made the commitment',      desc:'Told myself this time is different — and meant it.',                  status:'done' },
+      ]
+    },
+    {
+      id:'l2', title:'Building the Base',
+      desc:'No shortcuts. Just reps, habits, and showing up when it is hard.',
+      date:'Feb 2025', status:'done',
+      subs:[
+        { id:'s2a', title:'5am wake-up locked in',  desc:'90 days straight. Non-negotiable.',        status:'done' },
+        { id:'s2b', title:'Reading 20 pages a day', desc:'Knowledge compounds. Started the library.', status:'done' },
+        { id:'s2c', title:'Gym 4x per week',        desc:'Body and mind are the same machine.',       status:'done' },
+      ]
+    },
+    {
+      id:'l3', title:'The Grind Season',
+      desc:'Head down. Deep work. Nobody is watching yet — that is the point.',
+      date:'Apr 2025', status:'active',
+      subs:[
+        { id:'s3a', title:'Launched the first project', desc:'Shipped something real into the world, however small.',   status:'done'   },
+        { id:'s3b', title:'First paying customer',      desc:'Someone exchanged money for what I built. Proof of work.', status:'active' },
+        { id:'s3c', title:'10k saved',                  desc:'The emergency fund that buys peace of mind.',              status:'locked' },
+      ]
+    },
+    {
+      id:'l4', title:'First Breakthrough',
+      desc:'When the results finally start showing on the outside.',
+      date:'', status:'locked',
+      subs:[
+        { id:'s4a', title:'Consistent monthly income', desc:'Not a one-off. A system that pays me reliably.',  status:'locked' },
+        { id:'s4b', title:'Quit the job I hate',       desc:'The moment the cage opens for good.',             status:'locked' },
+        { id:'s4c', title:'Move to a better place',    desc:'My environment finally reflects my ambitions.',   status:'locked' },
+      ]
+    },
+    {
+      id:'l5', title:'The New Standard',
+      desc:'This is not the destination — it is the new floor.',
+      date:'', status:'locked',
+      subs:[
+        { id:'s5a', title:'100k milestone',         desc:'The number that felt impossible back in January.', status:'locked' },
+        { id:'s5b', title:'Help someone else rise', desc:'Pass the map to someone who needs it.',            status:'locked' },
+        { id:'s5c', title:'Wrote it all down',      desc:'The full story, from day one to here.',            status:'locked' },
+      ]
+    },
+    /* ── HOW TO ADD A NEW LEVEL ──────────────────────────────────
+       You can also click "+ ADD NEW LEVEL" button in the browser.
+       Or duplicate this object pattern here in the code:
+       {
+         id:'l6', title:'Level Name', desc:'Description.',
+         date:'Month Year', status:'locked',
+         subs:[
+           { id:'s6a', title:'Milestone', desc:'Detail.', status:'locked' },
+         ]
+       },
+    ─────────────────────────────────────────────────────────── */
+  ]
+};
+
+/* ═══════════════════════════════════════════════════════════════
+   STATE — loaded from localStorage or defaults
+═══════════════════════════════════════════════════════════════ */
+let STATE = loadState();
+
+function loadState() {
+  try {
+    const s = localStorage.getItem('ljt_v2');
+    return s ? JSON.parse(s) : deepClone(DEFAULTS);
+  } catch(e) { return deepClone(DEFAULTS); }
+}
+function saveState() {
+  try { localStorage.setItem('ljt_v2', JSON.stringify(STATE)); } catch(e){}
+}
+function deepClone(o) { return JSON.parse(JSON.stringify(o)); }
+function uid() { return 'x' + Math.random().toString(36).slice(2,8); }
+
+/* ═══════════════════════════════════════════════════════════════
+   STATUS HELPERS
+═══════════════════════════════════════════════════════════════ */
+const CYCLE  = ['locked','active','done'];
+const LABELS = { locked:'LOCKED', active:'IN PROGRESS', done:'COMPLETE' };
+function nodeIcon(s) { return s==='done'?'✓':s==='active'?'▶':'✦'; }
+function subIcon(s)  { return s==='done'?'✓':s==='active'?'▸':'◆'; }
+function cycleStatus(arr, id) {
+  const o = arr.find(x=>x.id===id); if(!o) return;
+  o.status = CYCLE[(CYCLE.indexOf(o.status)+1)%3];
+  saveState(); render(); toast('→ '+LABELS[o.status]);
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   PROGRESS
+═══════════════════════════════════════════════════════════════ */
+function calcProgress() {
+  const lvs = STATE.levels;
+  let tN=0, dN=0, dL=0;
+  lvs.forEach(l=>{
+    tN++; if(l.status==='done'){ dN++; dL++; }
+    l.subs.forEach(s=>{ tN++; if(s.status==='done') dN++; });
+  });
+  return { doneLvs:dL, totalLvs:lvs.length, pct:tN?Math.round(dN/tN*100):0 };
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   TOAST
+═══════════════════════════════════════════════════════════════ */
+function toast(msg) {
+  const el = document.getElementById('toast');
+  el.textContent = msg; el.classList.add('show');
+  clearTimeout(el._t); el._t = setTimeout(()=>el.classList.remove('show'),1800);
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   EDITABLE HELPER
+   Makes a span/div contenteditable and saves on blur.
+═══════════════════════════════════════════════════════════════ */
+function makeEditable(el, getValue, setValue, onDone) {
+  el.contentEditable = 'true';
+  el.spellcheck = false;
+  el.textContent = getValue();
+  el.addEventListener('blur', ()=>{
+    const v = el.textContent.trim();
+    setValue(v || getValue());
+    if(v) el.textContent = v;
+    saveState();
+    if(onDone) onDone();
+  });
+  el.addEventListener('keydown', e=>{
+    if(e.key==='Enter'){ e.preventDefault(); el.blur(); }
+  });
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   INIT STATIC EDITABLES (header + goal)
+═══════════════════════════════════════════════════════════════ */
+function initStaticEditables() {
+  const mt = document.getElementById('mainTitleEl');
+  mt.textContent = STATE.mainTitle;
+  mt.addEventListener('blur',()=>{ STATE.mainTitle = mt.textContent.trim()||STATE.mainTitle; saveState(); });
+  mt.addEventListener('keydown',e=>{ if(e.key==='Enter'){e.preventDefault();mt.blur();} });
+
+  const st = document.getElementById('subTitleEl');
+  st.textContent = STATE.subTitle;
+  st.addEventListener('blur',()=>{ STATE.subTitle = st.textContent.trim()||STATE.subTitle; saveState(); });
+  st.addEventListener('keydown',e=>{ if(e.key==='Enter'){e.preventDefault();st.blur();} });
+
+  const gt = document.getElementById('goalTitleEl');
+  gt.textContent = STATE.goalTitle;
+  gt.addEventListener('blur',()=>{ STATE.goalTitle = gt.textContent.trim()||STATE.goalTitle; saveState(); });
+  gt.addEventListener('keydown',e=>{ if(e.key==='Enter'){e.preventDefault();gt.blur();} });
+
+  const gd = document.getElementById('goalDescEl');
+  gd.textContent = STATE.goalDesc;
+  gd.addEventListener('blur',()=>{ STATE.goalDesc = gd.textContent.trim(); saveState(); });
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   RENDER — builds the full roadmap DOM
+═══════════════════════════════════════════════════════════════ */
+function render() {
+  const wrap = document.getElementById('roadmap-wrap');
+  [...wrap.querySelectorAll('.road-stop')].forEach(el=>el.remove());
+
+  const isMobile = window.innerWidth <= 600;
+  const nodeEls  = [];
+
+  STATE.levels.forEach((level, idx) => {
+    /* alternating sides — always left on mobile */
+    const isLeft = isMobile ? true : (idx % 2 === 0);
+    const side   = isLeft ? 'left' : 'right';
+
+    /* ── row ── */
+    const row = document.createElement('div');
+    row.className   = 'road-stop ' + side;
+    row.dataset.idx = idx;
+
+    /* ── main node ── */
+    const node = document.createElement('div');
+    node.className   = 'main-node st-' + level.status;
+    node.textContent = nodeIcon(level.status);
+    node.title       = 'Tap to cycle: locked → active → done';
+    node.addEventListener('click', () => cycleStatus(STATE.levels, level.id));
+
+    /* ── card ── */
+    const card = document.createElement('div');
+    card.className = 'level-card st-' + level.status;
+
+    /* level number */
+    const lnum = document.createElement('div');
+    lnum.className   = 'lv-num';
+    lnum.textContent = 'LEVEL ' + String(idx+1).padStart(2,'0');
+
+    /* title — editable */
+    const ltitle = document.createElement('span');
+    ltitle.className      = 'lv-title-el st-' + level.status;
+    ltitle.contentEditable = 'true';
+    ltitle.spellcheck      = false;
+    ltitle.textContent     = level.title;
+    ltitle.addEventListener('blur', ()=>{
+      level.title = ltitle.textContent.trim() || level.title;
+      saveState();
+    });
+    ltitle.addEventListener('keydown',e=>{ if(e.key==='Enter'){e.preventDefault();ltitle.blur();} });
+
+    /* desc — editable */
+    const ldesc = document.createElement('span');
+    ldesc.className      = 'lv-desc-el';
+    ldesc.contentEditable = 'true';
+    ldesc.spellcheck      = false;
+    ldesc.dataset.ph      = 'Add a description…';
+    ldesc.textContent     = level.desc;
+    ldesc.addEventListener('blur', ()=>{ level.desc = ldesc.textContent.trim(); saveState(); });
+
+    card.append(lnum, ltitle, ldesc);
+
+    /* date — editable */
+    const ldate = document.createElement('span');
+    ldate.className      = 'lv-date-el';
+    ldate.contentEditable = 'true';
+    ldate.spellcheck      = false;
+    ldate.textContent     = level.date;
+    ldate.addEventListener('blur', ()=>{ level.date = ldate.textContent.trim(); saveState(); });
+    ldate.addEventListener('keydown',e=>{ if(e.key==='Enter'){e.preventDefault();ldate.blur();} });
+    card.appendChild(ldate);
+
+    /* badge */
+    const badge = document.createElement('div');
+    badge.className   = 'lv-badge st-' + level.status;
+    badge.textContent = LABELS[level.status];
+    card.appendChild(badge);
+
+    /* ── subs ── */
+    const subList = document.createElement('div');
+    subList.className = 'sub-list';
+
+    level.subs.forEach((sub, si) => {
+      subList.appendChild(buildSubItem(level, sub, si, isLeft));
+    });
+
+    /* + add milestone button */
+    const addSubBtn = document.createElement('button');
+    addSubBtn.className   = 'btn-add-sub';
+    addSubBtn.innerHTML   = '＋ add milestone';
+    addSubBtn.addEventListener('click', e => {
+      e.stopPropagation();
+      level.subs.push({ id:uid(), title:'New Milestone', desc:'', status:'locked' });
+      saveState(); render();
+      toast('Milestone added');
+    });
+    subList.appendChild(addSubBtn);
+    card.appendChild(subList);
+
+    /* controls row: delete level */
+    const ctrl = document.createElement('div');
+    ctrl.className = 'lv-controls';
+    const delBtn = document.createElement('button');
+    delBtn.className   = 'btn-del-level';
+    delBtn.textContent = '✕ delete level';
+    delBtn.addEventListener('click', e => {
+      e.stopPropagation();
+      if(confirm('Delete this level?')) {
+        STATE.levels.splice(idx, 1);
+        saveState(); render(); toast('Level deleted');
+      }
+    });
+    ctrl.appendChild(delBtn);
+    card.appendChild(ctrl);
+
+    /* assemble row */
+    if(isLeft){ row.append(node, card); }
+    else       { row.append(card, node); }
+
+    wrap.appendChild(row);
+    nodeEls.push(node);
+  });
+
+  /* draw SVG after layout */
+  requestAnimationFrame(()=>drawPath(nodeEls));
+
+  /* update progress + crown */
+  updateProgress();
+}
+
+/* build one sub-milestone item */
+function buildSubItem(level, sub, si, isLeft) {
+  const item = document.createElement('div');
+  item.className = 'sub-item';
+
+  const dot = document.createElement('div');
+  dot.className   = 'sub-dot st-' + sub.status;
+  dot.textContent = subIcon(sub.status);
+  dot.title       = 'Tap to cycle status';
+  dot.addEventListener('click', e => {
+    e.stopPropagation();
+    cycleStatus(level.subs, sub.id);
+  });
+
+  const body = document.createElement('div');
+  body.className = 'sub-body';
+
+  const sname = document.createElement('span');
+  sname.className      = 'sub-name-el st-' + sub.status;
+  sname.contentEditable = 'true';
+  sname.spellcheck      = false;
+  sname.textContent     = sub.title;
+  sname.addEventListener('blur', ()=>{ sub.title = sname.textContent.trim()||sub.title; saveState(); });
+  sname.addEventListener('keydown',e=>{ if(e.key==='Enter'){e.preventDefault();sname.blur();} });
+
+  const sdesc = document.createElement('span');
+  sdesc.className      = 'sub-desc-el';
+  sdesc.contentEditable = 'true';
+  sdesc.spellcheck      = false;
+  sdesc.dataset.ph      = 'Add detail…';
+  sdesc.textContent     = sub.desc;
+  sdesc.addEventListener('blur', ()=>{ sub.desc = sdesc.textContent.trim(); saveState(); });
+
+  body.append(sname, sdesc);
+
+  const del = document.createElement('button');
+  del.className   = 'btn-del-sub';
+  del.textContent = '✕';
+  del.title       = 'Delete milestone';
+  del.addEventListener('click', e => {
+    e.stopPropagation();
+    level.subs.splice(si,1);
+    saveState(); render(); toast('Milestone removed');
+  });
+
+  item.append(dot, body, del);
+  return item;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   PROGRESS + CROWN
+═══════════════════════════════════════════════════════════════ */
+function updateProgress() {
+  const { doneLvs, totalLvs, pct } = calcProgress();
+  document.getElementById('progFill').style.width    = pct+'%';
+  document.getElementById('progLabel').textContent   = doneLvs+' of '+totalLvs+' levels complete';
+  document.getElementById('progPct').textContent     = pct+'%';
+
+  const allDone = doneLvs===totalLvs && totalLvs>0;
+  document.getElementById('finaleFill').style.height = allDone?'100%':'0';
+  document.getElementById('crownIcon').classList.toggle('lit', allDone);
+  document.getElementById('crownMsg').classList.toggle('lit',  allDone);
+  document.getElementById('crownSub').classList.toggle('lit',  allDone);
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   SVG FLOWING PATH
+   Draws a dashed grey track + glowing gold-green filled segment
+   for completed levels.
+═══════════════════════════════════════════════════════════════ */
+function drawPath(nodeEls) {
+  const svg  = document.getElementById('road-svg');
+  const wrap = document.getElementById('roadmap-wrap');
+  if(nodeEls.length < 2){ svg.innerHTML=''; return; }
+
+  const wRect = wrap.getBoundingClientRect();
+  const pts   = nodeEls.map(n=>{
+    const r = n.getBoundingClientRect();
+    return { x:r.left+r.width/2-wRect.left, y:r.top+r.height/2-wRect.top };
+  });
+
+  svg.setAttribute('width',  wRect.width);
+  svg.setAttribute('height', wRect.height);
+  svg.style.width  = wRect.width+'px';
+  svg.style.height = wRect.height+'px';
+
+  /* Build cubic bezier path through an array of points */
+  function makePath(pts) {
+    let d = `M ${pts[0].x} ${pts[0].y}`;
+    for(let i=0; i<pts.length-1; i++){
+      const a=pts[i], b=pts[i+1], my=(a.y+b.y)/2;
+      d += ` C ${a.x} ${my}, ${b.x} ${my}, ${b.x} ${b.y}`;
+    }
+    return d;
+  }
+
+  const fullD = makePath(pts);
+
+  /* Filled segment: include node if level is done, stop at first non-done */
+  const filledPts = [];
+  for(let i=0; i<STATE.levels.length; i++){
+    filledPts.push(pts[i]);
+    if(STATE.levels[i].status !== 'done') break;
+  }
+  const filledD = filledPts.length >= 2 ? makePath(filledPts) : '';
+
+  svg.innerHTML = `
+    <defs>
+      <filter id="glow" x="-60%" y="-60%" width="220%" height="220%">
+        <feGaussianBlur stdDeviation="2.5" result="b"/>
+        <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+      </filter>
+      <linearGradient id="grad" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0%"   stop-color="#c9973a"/>
+        <stop offset="100%" stop-color="#3ecf6e"/>
+      </linearGradient>
+    </defs>
+    <path d="${fullD}" fill="none" stroke="rgba(40,36,60,.8)"
+      stroke-width="2.5" stroke-dasharray="7 6" stroke-linecap="round"/>
+    ${filledD?`<path d="${filledD}" fill="none" stroke="url(#grad)"
+      stroke-width="3" stroke-linecap="round" filter="url(#glow)"/>`:''}
+  `;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   ADD LEVEL BUTTON
+═══════════════════════════════════════════════════════════════ */
+document.getElementById('addLevelBtn').addEventListener('click', ()=>{
+  const n = STATE.levels.length + 1;
+  STATE.levels.push({
+    id: uid(), title: 'New Level', desc: '', date: '', status: 'locked', subs: []
+  });
+  saveState(); render();
+  toast('Level '+n+' added');
+  setTimeout(()=>{
+    document.querySelector('.road-stop:last-of-type')?.scrollIntoView({behavior:'smooth',block:'center'});
+  }, 120);
+});
+
+/* ═══════════════════════════════════════════════════════════════
+   RESIZE — redraw SVG path on window resize
+═══════════════════════════════════════════════════════════════ */
+let _rt;
+window.addEventListener('resize', ()=>{ clearTimeout(_rt); _rt=setTimeout(render,150); });
+
+/* ═══════════════════════════════════════════════════════════════
+   BOOT
+═══════════════════════════════════════════════════════════════ */
+initStaticEditables();
+render();
+</script>
+</body>
+</html>
